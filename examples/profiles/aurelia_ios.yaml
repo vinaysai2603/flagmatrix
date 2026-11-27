@@ -1,0 +1,25 @@
+schema_version: "1.0"
+app_id: com.aurelia.bank
+tenant_id: aurelia
+platform: ios
+app_version: "4.2.0"
+build_flavor: production
+environment: Production
+installed_sdks:
+  - stripe_sdk
+  - biometric_auth
+sdk_versions:
+  stripe_sdk: "3.2.0"
+  biometric_auth: "2.0.0"
+native_resources:
+  launcher_icons:
+    - ic_launcher
+    - ic_diwali
+backend_api_versions:
+  payments: "2.2.0"
+device_capabilities:
+  biometrics: true
+  nfc: true
+identity_traits:
+  tenant_id: aurelia
+  tier: enterprise

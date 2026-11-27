@@ -1,0 +1,24 @@
+schema_version: "1.0"
+app_id: com.novapay.wallet
+tenant_id: novapay
+platform: android
+app_version: "3.1.0"
+build_flavor: production
+environment: Production
+installed_sdks:
+  - stripe_sdk
+  - biometric_auth
+sdk_versions:
+  stripe_sdk: "2.1.0"
+  biometric_auth: "1.4.0"
+native_resources:
+  launcher_icons:
+    - ic_launcher
+backend_api_versions:
+  payments: "1.9.0"
+device_capabilities:
+  biometrics: true
+  nfc: true
+identity_traits:
+  tenant_id: novapay
+  tier: standard

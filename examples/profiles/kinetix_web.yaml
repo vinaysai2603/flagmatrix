@@ -1,0 +1,18 @@
+schema_version: "1.0"
+app_id: com.kinetix.webpay
+tenant_id: kinetix
+platform: web
+app_version: "2.0.0"
+build_flavor: production
+environment: Production
+installed_sdks:
+  - stripe_sdk
+sdk_versions:
+  stripe_sdk: "3.1.0"
+native_resources: {}
+backend_api_versions:
+  payments: "2.1.0"
+device_capabilities: {}
+identity_traits:
+  tenant_id: kinetix
+  tier: web

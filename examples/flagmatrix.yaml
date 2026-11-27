@@ -1,0 +1,9 @@
+schema_version: "1.0"
+flagsmith:
+  url: http://localhost:8000
+  api_key_env: FLAGSMITH_API_KEY_localhost_8000
+project_id: 1
+environment: Development
+profiles_path: profiles
+rules_path: rules.yaml
+strict: false

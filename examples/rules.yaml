@@ -1,0 +1,44 @@
+schema_version: "1.0"
+rules:
+  - feature_name: instant_payouts
+    constraints:
+      - id: stripe-sdk-min-v3
+        type: sdk_version
+        target: stripe_sdk
+        min_version: "3.0.0"
+        description: Instant payouts require Stripe SDK >= 3.0.0
+      - id: payments-api-min-v2
+        type: backend_api_version
+        target: payments
+        min_version: "2.0.0"
+        description: Instant payouts require Payments API >= 2.0.0
+
+  - feature_name: biometric_checkout
+    platforms:
+      - android
+      - ios
+    disallow_other_platforms: true
+    constraints:
+      - id: biometric-sdk-installed
+        type: sdk_installed
+        target: biometric_auth
+      - id: biometric-hw-supported
+        type: device_capability
+        target: biometrics
+        equals: true
+
+  - feature_name: festival_launcher_icon
+    platforms:
+      - android
+      - ios
+    constraints:
+      - id: diwali-launcher-icon-present
+        type: native_resource
+        target: launcher_icons
+        equals: ic_diwali
+
+  - feature_name: legacy_pin_flow
+    constraints:
+      - id: legacy-pin-conflicts-biometric
+        type: incompatible_with
+        target: biometric_checkout
