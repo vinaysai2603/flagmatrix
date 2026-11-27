@@ -120,13 +120,18 @@ class FlagsmithClient:
 
     def get_environment_flags(self, environment_key: str) -> dict[str, FlagValueState]:
         """Evaluate environment default flags via official Flagsmith SDK."""
-        sdk = Flagsmith(
-            environment_key=environment_key,
-            api_url=f"{self.base_url}/api/v1/",
-            request_timeout_seconds=int(self._timeout),
-        )
-        flags = sdk.get_environment_flags()
-        return self._convert_sdk_flags(flags, identity="__environment_default__")
+        try:
+            sdk = Flagsmith(
+                environment_key=environment_key,
+                api_url=f"{self.base_url}/api/v1/",
+                request_timeout_seconds=int(self._timeout),
+            )
+            flags = sdk.get_environment_flags()
+            return self._convert_sdk_flags(flags, identity="__environment_default__")
+        except Exception as exc:
+            raise FlagsmithConnectionError(
+                f"Flagsmith SDK get_environment_flags failed: {exc}"
+            ) from exc
 
     def get_identity_flags(
         self,
@@ -135,13 +140,18 @@ class FlagsmithClient:
         traits: dict[str, Any] | None = None,
     ) -> dict[str, FlagValueState]:
         """Evaluate effective flags for a specific identity + traits via official SDK."""
-        sdk = Flagsmith(
-            environment_key=environment_key,
-            api_url=f"{self.base_url}/api/v1/",
-            request_timeout_seconds=int(self._timeout),
-        )
-        flags = sdk.get_identity_flags(identifier=identifier, traits=traits or {})
-        return self._convert_sdk_flags(flags, identity=identifier)
+        try:
+            sdk = Flagsmith(
+                environment_key=environment_key,
+                api_url=f"{self.base_url}/api/v1/",
+                request_timeout_seconds=int(self._timeout),
+            )
+            flags = sdk.get_identity_flags(identifier=identifier, traits=traits or {})
+            return self._convert_sdk_flags(flags, identity=identifier)
+        except Exception as exc:
+            raise FlagsmithConnectionError(
+                f"Flagsmith SDK get_identity_flags failed for {identifier!r}: {exc}"
+            ) from exc
 
     @staticmethod
     def _convert_sdk_flags(flags_obj: Any, identity: str) -> dict[str, FlagValueState]:

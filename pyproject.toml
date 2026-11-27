@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.7,<3.0",
     "pyyaml>=6.0,<7.0",
     "packaging>=24.0,<26.0",
+    "semver>=3.0,<4.0",
     "httpx>=0.27,<1.0",
     "flagsmith>=3.0,<5.0",
     "typer>=0.12,<1.0",
@@ -39,3 +40,6 @@ testpaths = ["tests"]
 pythonpath = ["core", "cli", "api"]
 addopts = "-q"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: integration tests requiring a running self-hosted Flagsmith instance",
+]

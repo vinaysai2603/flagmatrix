@@ -173,7 +173,7 @@ class RuleSet(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = "1.0"
-    rules: list[FeatureRule] = Field(default_factory=list)
+    rules: list[FeatureRule] = Field(..., min_length=1)
 
     @field_validator("schema_version")
     @classmethod

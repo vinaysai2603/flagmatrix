@@ -469,9 +469,17 @@ class CompatibilityEngine:
         run_id: str | None = None,
     ) -> ValidationReport:
         """Run validation across a list of (profile, identity, flags) tuples."""
+        if not evaluations:
+            raise ValueError("Cannot run validation with zero evaluated profiles.")
+        if not ruleset.rules:
+            raise ValueError("Cannot run validation with an empty ruleset.")
+
         findings: list[EvaluationFinding] = []
         for profile, identity, flags in evaluations:
             findings.extend(self.evaluate_profile(profile, flags, ruleset, identity))
+
+        if not findings:
+            raise ValueError("Validation produced zero findings; refusing empty approval.")
 
         passed = sum(1 for f in findings if f.status == EvaluationStatus.PASS)
         conflicts = sum(1 for f in findings if f.status == EvaluationStatus.CONFLICT)

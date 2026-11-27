@@ -10,6 +10,7 @@ from flagmatrix_core.flagsmith_client import (
     FlagsmithProject,
     redact_secret,
 )
+from flagmatrix_core.identity import build_identity_and_traits
 from flagmatrix_core.loader import (
     ManifestValidationError,
     load_profile,
@@ -26,7 +27,12 @@ from flagmatrix_core.models import (
     RuleSet,
     ValidationReport,
 )
-from flagmatrix_core.semver import MalformedVersionError, parse_semver, satisfies_version_range
+from flagmatrix_core.semver import (
+    MalformedVersionError,
+    compare_semver,
+    parse_semver,
+    satisfies_version_range,
+)
 from flagmatrix_core.testing_engine import (
     ConfigurationTestingEngine,
     CoverageSummary,
@@ -61,7 +67,9 @@ __all__ = [
     "TestRunResult",
     "ValidationReport",
     "__version__",
+    "build_identity_and_traits",
     "compare_environments",
+    "compare_semver",
     "generate_pairwise_flag_configs",
     "load_profile",
     "load_profiles",

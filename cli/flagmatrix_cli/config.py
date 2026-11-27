@@ -38,18 +38,29 @@ class FlagMatrixConfig(BaseModel):
     profiles_path: str = "profiles"
     rules_path: str = "rules.yaml"
     strict: bool = False
+    config_dir: Path | None = Field(default=None, exclude=True)
+
+    def resolve_path(self, raw_path: str) -> Path:
+        """Resolve a path relative to the directory containing flagmatrix.yaml."""
+        candidate = Path(raw_path)
+        if candidate.is_absolute() or self.config_dir is None:
+            return candidate
+        return (self.config_dir / candidate).resolve()
 
 
 def load_config(path: Path) -> FlagMatrixConfig:
-    if not path.exists():
+    resolved = path.resolve()
+    if not resolved.exists():
         raise ManifestValidationError(path, "config file does not exist")
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ManifestValidationError(path, f"invalid YAML: {exc}") from exc
     if not isinstance(raw, dict):
         raise ManifestValidationError(path, "config root must be a YAML mapping")
     try:
-        return FlagMatrixConfig.model_validate(raw)
+        cfg = FlagMatrixConfig.model_validate(raw)
     except ValidationError as exc:
         raise ManifestValidationError(path, str(exc)) from exc
+    cfg.config_dir = resolved.parent
+    return cfg

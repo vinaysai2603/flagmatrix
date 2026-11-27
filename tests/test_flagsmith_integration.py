@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from flagmatrix_core import (
     ApplicationProfile,
     CapabilityConstraint,
@@ -84,6 +86,7 @@ def test_pairwise_generation_and_coverage_separation() -> None:
     assert res.coverage.exhaustive is False
 
 
+@pytest.mark.live
 def test_live_local_flagsmith_integration() -> None:
     creds = _load_local_env()
     assert creds is not None, "flagsmith/flagsmith.env must exist for local integration test"

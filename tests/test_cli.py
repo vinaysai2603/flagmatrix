@@ -123,13 +123,14 @@ def test_cli_validate_exit_codes_and_json_report(tmp_path: Path) -> None:
     )
     assert res_err.exit_code == EXIT_ERROR
 
-    # Case 5: connect command redacts key
+    # Case 5: connect command redacts key and omits environment api_key
     with (
         patch("flagmatrix_cli.main.FlagsmithClient.check_health", return_value={"image_tag": "2.295.2", "experimentation_enabled": True}),
         patch("flagmatrix_cli.main.FlagsmithClient.list_projects", return_value=fake_projects),
         patch("flagmatrix_cli.main.FlagsmithClient.list_environments", return_value=fake_envs),
     ):
-        res_conn = runner.invoke(app, ["connect", "--api-key", "CI1CYq6r.secretkey1234", "--json"])
+        res_conn = runner.invoke(app, ["connect", "--api-key", "test_synthetic_key_0001", "--json"])
     assert res_conn.exit_code == EXIT_OK
-    assert "secretkey1234" not in res_conn.stdout
-    assert "CI1C...1234" in res_conn.stdout
+    assert "test_synthetic_key_0001" not in res_conn.stdout
+    assert "test...0001" in res_conn.stdout
+    assert "env_dev" not in res_conn.stdout

@@ -17,8 +17,10 @@ from flagmatrix_core import (
     EvaluationStatus,
     FlagsmithClient,
     FlagsmithConnectionError,
+    MalformedVersionError,
     ManifestValidationError,
     ValidationReport,
+    build_identity_and_traits,
     compare_environments,
     load_profiles,
     load_ruleset,
@@ -167,10 +169,13 @@ def connect(
         version = client.check_health()
         projects = client.list_projects()
         envs_by_project = {
-            p.id: [e.model_dump() for e in client.list_environments(p.id)]
+            p.id: [
+                {"id": e.id, "name": e.name, "project": e.project}
+                for e in client.list_environments(p.id)
+            ]
             for p in projects
         }
-    except (ManifestValidationError, FlagsmithConnectionError) as exc:
+    except (ManifestValidationError, FlagsmithConnectionError, ValueError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_ERROR)
 
@@ -203,19 +208,20 @@ def validate(
     project_id: Optional[int] = typer.Option(None, "--project-id", help="Flagsmith project ID"),
     url: Optional[str] = typer.Option(None, "--url", help="Flagsmith base URL"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="Flagsmith API key"),
-    strict: Optional[bool] = typer.Option(None, "--strict", help="Treat UNKNOWN as blocking"),
+    strict: Optional[bool] = typer.Option(None, "--strict/--no-strict", help="Treat UNKNOWN as blocking"),
+    ephemeral: bool = typer.Option(True, "--ephemeral/--no-ephemeral", help="Use isolated transient evaluation identities"),
     json_output: bool = typer.Option(False, "--json", help="Emit JSON output"),
     report_out: Optional[Path] = typer.Option(None, "--report-out", help="Write JSON report to file"),
 ) -> None:
     """Validate application capability profiles against Flagsmith feature states."""
     try:
-        cfg = load_config(config) if config else (
+        cfg = load_config(config) if config is not None else (
             load_config(Path("flagmatrix.yaml")) if Path("flagmatrix.yaml").exists() else None
         )
-        prof_path = profiles or (Path(cfg.profiles_path) if cfg else None)
-        rules_path = rules or (Path(cfg.rules_path) if cfg else None)
-        env_name = env or (cfg.environment if cfg else "Development")
-        proj_id = project_id or (cfg.project_id if cfg else 1)
+        prof_path = profiles if profiles is not None else (cfg.resolve_path(cfg.profiles_path) if cfg else None)
+        rules_path = rules if rules is not None else (cfg.resolve_path(cfg.rules_path) if cfg else None)
+        env_name = env if env is not None else (cfg.environment if cfg else "Development")
+        proj_id = project_id if project_id is not None else (cfg.project_id if cfg else 1)
         is_strict = strict if strict is not None else (cfg.strict if cfg else False)
 
         if not prof_path or not rules_path:
@@ -234,13 +240,7 @@ def validate(
 
         evaluations = []
         for profile in loaded_profiles:
-            identity = f"{profile.tenant_id}_{profile.platform}_{profile.app_version}"
-            traits = {
-                "tenant_id": profile.tenant_id,
-                "platform": profile.platform,
-                "app_version": profile.app_version,
-                **profile.identity_traits,
-            }
+            identity, traits = build_identity_and_traits(profile, ephemeral=ephemeral)
             flags = client.get_identity_flags(
                 target_env.api_key, identifier=identity, traits=traits
             )
@@ -250,7 +250,7 @@ def validate(
         report = engine.run_validation(
             evaluations, ruleset, environment=target_env.name, strict=is_strict
         )
-    except (ManifestValidationError, FlagsmithConnectionError, ValueError) as exc:
+    except (ManifestValidationError, FlagsmithConnectionError, MalformedVersionError, ValueError) as exc:
         err_console.print(f"[red]Configuration/Execution Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_ERROR)
 
@@ -276,17 +276,19 @@ def compare(
     project_id: Optional[int] = typer.Option(None, "--project-id", help="Flagsmith project ID"),
     url: Optional[str] = typer.Option(None, "--url", help="Flagsmith base URL"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="Flagsmith API key"),
-    strict: bool = typer.Option(False, "--strict", help="Treat UNKNOWN as blocking"),
+    strict: Optional[bool] = typer.Option(None, "--strict/--no-strict", help="Treat UNKNOWN as blocking"),
+    ephemeral: bool = typer.Option(True, "--ephemeral/--no-ephemeral", help="Use isolated transient evaluation identities"),
     json_output: bool = typer.Option(False, "--json", help="Emit JSON output"),
 ) -> None:
     """Compare feature compatibility between two Flagsmith environments."""
     try:
-        cfg = load_config(config) if config else (
+        cfg = load_config(config) if config is not None else (
             load_config(Path("flagmatrix.yaml")) if Path("flagmatrix.yaml").exists() else None
         )
-        prof_path = profiles or (Path(cfg.profiles_path) if cfg else None)
-        rules_path = rules or (Path(cfg.rules_path) if cfg else None)
-        proj_id = project_id or (cfg.project_id if cfg else 1)
+        prof_path = profiles if profiles is not None else (cfg.resolve_path(cfg.profiles_path) if cfg else None)
+        rules_path = rules if rules is not None else (cfg.resolve_path(cfg.rules_path) if cfg else None)
+        proj_id = project_id if project_id is not None else (cfg.project_id if cfg else 1)
+        is_strict = strict if strict is not None else (cfg.strict if cfg else False)
         if not prof_path or not rules_path:
             raise ValueError("Both --profiles and --rules (or flagmatrix.yaml) are required.")
 
@@ -305,15 +307,14 @@ def compare(
         src_evals = []
         tgt_evals = []
         for profile in loaded_profiles:
-            identity = f"{profile.tenant_id}_{profile.platform}_{profile.app_version}"
-            traits = {"tenant_id": profile.tenant_id, "platform": profile.platform, **profile.identity_traits}
+            identity, traits = build_identity_and_traits(profile, ephemeral=ephemeral)
             src_evals.append((profile, identity, client.get_identity_flags(src.api_key, identity, traits)))
             tgt_evals.append((profile, identity, client.get_identity_flags(tgt.api_key, identity, traits)))
 
         comparison = compare_environments(
-            src.name, tgt.name, src_evals, tgt_evals, ruleset, strict=strict
+            src.name, tgt.name, src_evals, tgt_evals, ruleset, strict=is_strict
         )
-    except (ManifestValidationError, FlagsmithConnectionError, ValueError) as exc:
+    except (ManifestValidationError, FlagsmithConnectionError, MalformedVersionError, ValueError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_ERROR)
 
