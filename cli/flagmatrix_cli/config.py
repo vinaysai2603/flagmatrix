@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,14 +19,27 @@ class FlagsmithConfig(BaseModel):
     url: str = "http://localhost:8000"
     api_key_env: str | None = None
 
-    def resolve_api_key(self, explicit_key: str | None = None) -> str | None:
+    def resolve_api_key(
+        self,
+        explicit_key: str | None = None,
+        target_url: str | None = None,
+    ) -> str | None:
         if explicit_key:
             return explicit_key
-        if self.api_key_env and os.environ.get(self.api_key_env):
-            return os.environ[self.api_key_env]
-        parsed = urlparse(self.url)
+        effective_url = (target_url or self.url).rstrip("/")
+        configured_url = self.url.rstrip("/")
+        parsed = urlparse(effective_url)
         host_key = f"FLAGSMITH_API_KEY_{parsed.netloc.replace(':', '_')}"
-        return os.environ.get(host_key) or os.environ.get("FLAGSMITH_API_KEY")
+        sanitized_key = f"FLAGSMITH_API_KEY_{re.sub(r'[^A-Za-z0-9_]', '_', parsed.netloc)}"
+        if os.environ.get(host_key):
+            return os.environ[host_key]
+        if os.environ.get(sanitized_key):
+            return os.environ[sanitized_key]
+        if effective_url == configured_url:
+            if self.api_key_env and os.environ.get(self.api_key_env):
+                return os.environ[self.api_key_env]
+            return os.environ.get("FLAGSMITH_API_KEY")
+        return None
 
 
 class FlagMatrixConfig(BaseModel):

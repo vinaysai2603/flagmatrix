@@ -225,3 +225,45 @@ def test_api_security_omits_env_keys_and_blocks_remote_url() -> None:
 
     bad_conn = client.post("/api/v1/connection", json={"url": "http://169.254.169.254/latest"})
     assert bad_conn.status_code == 400
+
+
+def test_cli_url_precedence_and_server_scoped_credentials(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg_file = tmp_path / "flagmatrix.yaml"
+    cfg_file.write_text(
+        'schema_version: "1.0"\nflagsmith:\n  url: http://localhost:8000\n  api_key_env: CUSTOM_KEY\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CUSTOM_KEY", "synth_key_localhost_8000")
+    monkeypatch.setenv("FLAGSMITH_API_KEY_127_0_0_1_9000", "synth_key_9000")
+    cfg = load_config(cfg_file)
+
+    from flagmatrix_cli.main import _resolve_client
+
+    c1 = _resolve_client(url=None, api_key=None, cfg=cfg)
+    assert c1.base_url == "http://localhost:8000"
+    assert c1._api_key == "synth_key_localhost_8000"
+
+    c2 = _resolve_client(url="http://127.0.0.1:9000", api_key=None, cfg=cfg)
+    assert c2.base_url == "http://127.0.0.1:9000"
+    assert c2._api_key == "synth_key_9000"
+
+    c3 = _resolve_client(url="http://127.0.0.1:9999", api_key=None, cfg=cfg)
+    assert c3.base_url == "http://127.0.0.1:9999"
+    assert c3._api_key is None
+
+
+def test_api_connection_clears_credentials_on_server_change() -> None:
+    from flagmatrix_api.app import state
+
+    state.flagsmith_url = "http://localhost:8000"
+    state.flagsmith_api_key = "synth_old_server_key"
+    client = TestClient(api_app)
+
+    with patch(
+        "flagmatrix_core.flagsmith_client.FlagsmithClient.check_health",
+        return_value={"image_tag": "2.295.2", "experimentation_enabled": True},
+    ):
+        resp = client.post("/api/v1/connection", json={"url": "http://127.0.0.1:8000"})
+    assert resp.status_code == 200
+    assert state.flagsmith_api_key is None
+    assert resp.json()["credential"] == "<empty>"

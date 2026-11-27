@@ -117,9 +117,14 @@ def get_health() -> dict[str, Any]:
 @app.post("/api/v1/connection")
 def update_connection(req: ConnectionUpdateRequest) -> dict[str, Any]:
     validated_url = _validate_flagsmith_url(req.url)
+    previous_url = state.flagsmith_url.rstrip("/")
     state.flagsmith_url = validated_url
     if req.api_key is not None and req.api_key.strip():
         state.flagsmith_api_key = req.api_key.strip()
+    elif validated_url != previous_url:
+        parsed = urlparse(validated_url)
+        host_key = f"FLAGSMITH_API_KEY_{parsed.netloc.replace(':', '_')}"
+        state.flagsmith_api_key = os.environ.get(host_key)
     try:
         version = state.get_client().check_health()
     except FlagsmithConnectionError as exc:

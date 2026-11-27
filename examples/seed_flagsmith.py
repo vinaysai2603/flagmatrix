@@ -27,34 +27,67 @@ FEATURES = [
     ("legacy_pin_flow", False),
 ]
 
-TENANT_OVERRIDES: dict[str, tuple[int, dict[str, bool]]] = {
-    "novapay": (
-        1,
-        {
-            "instant_payouts": True,
-            "biometric_checkout": True,
-            "festival_launcher_icon": True,
-            "legacy_pin_flow": True,
-        },
-    ),
-    "aurelia": (
-        2,
-        {
-            "instant_payouts": True,
-            "biometric_checkout": True,
-            "festival_launcher_icon": True,
-            "legacy_pin_flow": False,
-        },
-    ),
-    "kinetix": (
-        3,
-        {
-            "instant_payouts": True,
-            "biometric_checkout": True,
-            "festival_launcher_icon": False,
-            "legacy_pin_flow": False,
-        },
-    ),
+ENV_TENANT_OVERRIDES: dict[str, dict[str, tuple[int, dict[str, bool]]]] = {
+    "Development": {
+        # In Development, NovaPay only has compatible biometric_checkout enabled
+        "novapay": (
+            1,
+            {
+                "instant_payouts": False,
+                "biometric_checkout": True,
+                "festival_launcher_icon": False,
+                "legacy_pin_flow": False,
+            },
+        ),
+        "aurelia": (
+            2,
+            {
+                "instant_payouts": True,
+                "biometric_checkout": True,
+                "festival_launcher_icon": True,
+                "legacy_pin_flow": False,
+            },
+        ),
+        "kinetix": (
+            3,
+            {
+                "instant_payouts": True,
+                "biometric_checkout": False,
+                "festival_launcher_icon": False,
+                "legacy_pin_flow": False,
+            },
+        ),
+    },
+    "Production": {
+        # In Production, NovaPay & Kinetix have incompatible flags enabled -> real diff & conflicts!
+        "novapay": (
+            1,
+            {
+                "instant_payouts": True,
+                "biometric_checkout": True,
+                "festival_launcher_icon": True,
+                "legacy_pin_flow": True,
+            },
+        ),
+        "aurelia": (
+            2,
+            {
+                "instant_payouts": True,
+                "biometric_checkout": True,
+                "festival_launcher_icon": True,
+                "legacy_pin_flow": False,
+            },
+        ),
+        "kinetix": (
+            3,
+            {
+                "instant_payouts": True,
+                "biometric_checkout": True,
+                "festival_launcher_icon": False,
+                "legacy_pin_flow": False,
+            },
+        ),
+    },
 }
 
 
@@ -87,13 +120,22 @@ def _get_or_create_project(client: httpx.Client, org_id: int, name: str) -> dict
     for proj in items:
         if proj["name"] == name:
             return proj
+
+    explicit_id = os.environ.get("FLAGMATRIX_DEMO_PROJECT_ID")
+    if explicit_id:
+        for proj in items:
+            if str(proj["id"]) == explicit_id:
+                return proj
+        raise RuntimeError(f"Configured FLAGMATRIX_DEMO_PROJECT_ID={explicit_id} not found.")
+
     created = client.post("/api/v1/projects/", json={"name": name, "organisation": org_id})
-    if created.status_code == 403 and items:
-        print(
-            f"Note: Creating a new project returned 403; reusing existing project "
-            f"'{items[0]['name']}' (id={items[0]['id']})."
+    if created.status_code == 403:
+        raise RuntimeError(
+            f"Creating isolated project {name!r} returned 403 Forbidden. "
+            "Refusing to modify an unrelated existing project. "
+            "Set FLAGMATRIX_DEMO_PROJECT=<existing_project_name> or "
+            "FLAGMATRIX_DEMO_PROJECT_ID=<id> to opt in explicitly."
         )
-        return items[0]
     created.raise_for_status()
     return created.json()
 
@@ -201,11 +243,16 @@ def _upsert_segment_override(
     )
     if existing_state is not None:
         if existing_state.get("enabled") != enabled:
-            patch = client.patch(
+            put = client.put(
                 f"/api/v1/features/featurestates/{existing_state['id']}/",
-                json={"enabled": enabled},
+                json={
+                    "feature": feature_id,
+                    "environment": env_id,
+                    "feature_segment": seg_link_id,
+                    "enabled": enabled,
+                },
             )
-            patch.raise_for_status()
+            put.raise_for_status()
         return
 
     create_fs = client.post(
@@ -248,13 +295,14 @@ def seed() -> None:
 
         segment_map = {
             tenant: _get_or_create_segment(client, project_id, f"{tenant}_tenant", tenant)
-            for tenant in TENANT_OVERRIDES
+            for tenant in ENV_TENANT_OVERRIDES["Production"]
         }
 
         for env in (dev_env, prod_env):
             eid = env["id"]
             ekey = env["api_key"]
-            for tenant, (priority, flag_states) in TENANT_OVERRIDES.items():
+            overrides = ENV_TENANT_OVERRIDES[env["name"]]
+            for tenant, (priority, flag_states) in overrides.items():
                 seg_id = segment_map[tenant]["id"]
                 for feat_name, enabled in flag_states.items():
                     _upsert_segment_override(

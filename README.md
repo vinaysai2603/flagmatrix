@@ -44,8 +44,12 @@ Feature flag platforms tell you **which flags are enabled for which identities**
 
 ## Screenshots & Demo Video
 
-- **Demo Video:** _Add your recorded walkthrough link here before submission._
-- **Screenshots:** _Add captured screenshots of Flutter Studio (Compatibility Matrix, Conflict Details, Environment Comparison) and CLI output here before submission._
+- **Demo Video:** _Record and link your walkthrough video before final submission._
+- **Screenshots:** _Capture and add screenshots to `docs/screenshots/` before final submission:_
+  - `docs/screenshots/studio-matrix.png` — Compatibility Matrix (`Production`)
+  - `docs/screenshots/studio-conflicts.png` — Conflict Details
+  - `docs/screenshots/studio-compare.png` — Environment Comparison (`Development` → `Production`)
+  - `docs/screenshots/cli-strict-gate.png` — Blocked (`exit 1`) and Passing (`exit 0`) CLI output
 
 ## Windows Setup (From a Fresh Clone)
 
@@ -75,6 +79,8 @@ $env:FLAGSMITH_API_KEY_localhost_8000 = "<your-master-api-key>"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
+# If reusing your existing single-project OSS Flagsmith project:
+$env:FLAGMATRIX_DEMO_PROJECT = "flagmatrix"
 python examples\seed_flagsmith.py
 ```
 
@@ -94,17 +100,19 @@ flagmatrix report report.json --format markdown
 | `1` | Compatibility conflicts (or unknowns in `--strict` mode) block the release |
 | `2` | Invalid configuration, malformed manifest/rules, or Flagsmith SDK/API error |
 
-## Live Failure-to-Success Demonstration
+## Live Failure-to-Success Demonstration (Strict Mode)
 
-1. **Blocked release (`novapay_android.yaml` against `Production`):**
+1. **Blocked release (`novapay_android.yaml` against `Production --strict`):**
    - `stripe_sdk: 2.1.0 < 3.0.0` (`CONFLICT`)
    - `payments: 1.9.0 < 2.0.0` (`CONFLICT`)
    - `ic_diwali` missing from `native_resources.launcher_icons` (`CONFLICT`)
    - `legacy_pin_flow` enabled alongside `biometric_checkout` (`CONFLICT`)
-   - Result: `total=6 pass=2 conflicts=4 unknown=0 skipped=0 blocking=True` → **Exit code `1`**.
-2. **Passing release (`aurelia_ios.yaml` against `Production`):**
-   - `stripe_sdk: 3.2.0`, `payments: 2.2.0`, `ic_diwali` present, `legacy_pin_flow` disabled (`SKIPPED`).
-   - Result: `total=6 pass=5 conflicts=0 unknown=0 skipped=1 blocking=False` → **Exit code `0`**.
+   - Observed output: `Summary: total=6 pass=2 conflicts=4 unknown=0 skipped=0 blocking=True` → **Exit code `1`**.
+2. **Passing release (after disabling incompatible flags for `novapay_tenant` in Flagsmith `Production`):**
+   - `biometric_checkout` remains enabled and passes (`PASS`), while `instant_payouts`, `festival_launcher_icon`, and `legacy_pin_flow` are disabled (`SKIPPED`).
+   - Observed output: `Summary: total=5 pass=2 conflicts=0 unknown=0 skipped=3 blocking=False` → **Exit code `0`**.
+3. **Environment comparison (`Development` → `Production`):**
+   - Observed output: `Comparison Development -> Production: 4 flag diffs, new_conflicts=5, new_unknowns=0` → **Exit code `1`**.
 
 ## CI/CD Integration
 
@@ -123,8 +131,7 @@ flutter run -d chrome
 
 ## Verified Test Results
 
-- `pytest -m "not live" -v`: **23 passed** (core, CLI, FastAPI, fintech E2E, audit regressions).
-- `pytest -m live -v`: **1 passed** (live integration against self-hosted Flagsmith `2.295.2`).
+- `pytest -v` (full suite: offline + live Flagsmith): **26 passed** (25 offline unit/CLI/API/E2E/regression tests + 1 live Flagsmith `2.295.2` integration test).
 - `studio/`: `flutter analyze` (**No issues found**), `flutter test` (**1 passed**), `flutter build web` (**Built `build\web`**).
 - `examples/sample_app/`: `flutter test` (**1 passed**).
 

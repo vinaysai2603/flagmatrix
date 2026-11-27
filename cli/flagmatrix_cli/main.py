@@ -45,11 +45,15 @@ def _resolve_client(
     api_key: Optional[str],
     cfg: Optional[FlagMatrixConfig],
 ) -> FlagsmithClient:
-    base_url = url or (cfg.flagsmith.url if cfg else os.environ.get("FLAGSMITH_API_URL", "http://localhost:8000"))
+    base_url = (
+        url
+        if url is not None
+        else (cfg.flagsmith.url if cfg else os.environ.get("FLAGSMITH_API_URL", "http://localhost:8000"))
+    ).rstrip("/")
     key = (
-        cfg.flagsmith.resolve_api_key(api_key)
+        cfg.flagsmith.resolve_api_key(explicit_key=api_key, target_url=base_url)
         if cfg
-        else FlagsmithConfig(url=base_url).resolve_api_key(api_key)
+        else FlagsmithConfig(url=base_url).resolve_api_key(explicit_key=api_key, target_url=base_url)
     )
     return FlagsmithClient(base_url=base_url, api_key=key)
 
